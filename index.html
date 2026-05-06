@@ -10,7 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1e1b4b">
     
-    <title>Kids Star Tracker Pro v3.5</title>
+    <title>Kids Star Tracker Pro v3.6</title>
     
     <!-- Confetti Library -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -241,7 +241,7 @@
             <div class="header-left">
                 <h1>STAR TRACKER</h1>
                 <div class="version-bar">
-                    <span>v3.5 PRO</span>
+                    <span>v3.6 PRO (Endlos)</span>
                     <div id="status-dot" class="status-dot"></div>
                     <div id="unlock-status-container" style="margin-left: 6px; display: flex; align-items: center;"></div>
                 </div>
@@ -416,7 +416,6 @@
                         if (docSnap.exists()) {
                             state = docSnap.data();
                             if(!state.history) state.history = [];
-                            // Sicherstellen, dass Aufgaben existieren. Wenn Liste leer, Standard laden (Fixe Hinterlegung).
                             if(!state.tasks || state.tasks.length === 0) {
                                 state.tasks = DEFAULT_TASKS_POOL.map((t, i) => ({ ...t, id: i + 1 }));
                             }
@@ -487,37 +486,68 @@
                 const step = k.valSmall || 10;
                 const count = Math.round((k.count || 0) * 10) / 10;
                 
-                // --- NEUE BERECHNUNG: Balken bleibt voll, bis Belohnung abgeholt wird ---
+                // --- KONTINUIERLICHES LEVEL-UP SYSTEM ---
                 const ackTens = k.ackTens || 0;
+                // Sterne, die über die abgeholten Runden hinausgehen
                 const activeSmallPoints = Math.max(0, count - (ackTens * step));
+                // Sterne, die gerade auf dem Weg zur NÄCHSTEN Belohnung sind (max 10)
                 const visualSmallPoints = Math.min(step, activeSmallPoints);
+                // Anzahl der erreichten, aber noch nicht abgeholten Belohnungen
                 const unclaimed = Math.floor(activeSmallPoints / step);
                 
-                // Prozentuale Fortschritte
-                const progSmall = (visualSmallPoints / step) * 100;
+                // Nächstes fortlaufendes Ziel (z.B. nach 10 kommt 20, nach 20 kommt 30)
+                const nextSmallTarget = (ackTens + 1) * step;
+                
+                // Fortschrittsbalken: Berechnet sich aus gesamten Punkten vs nächstes Ziel.
+                // Er fällt NIE auf 0 zurück! (z.B. bei 10 von 20 ist der Balken halb voll)
+                const progSmall = Math.min(100, (count / nextSmallTarget) * 100);
                 const progBig = Math.min(100, (count / (k.valBig || 100)) * 100);
                 const progMega = Math.min(100, (count / (k.valMega || 300)) * 100);
                 
-                const starsForNextSmall = Math.round((step - visualSmallPoints) * 10) / 10;
+                // Berechnung für die Textanzeige
+                const starsForNextSmall = Math.round((nextSmallTarget - count) * 10) / 10;
                 const starsForBig = Math.max(0, Math.ceil((k.valBig || 100) - count));
                 const starsForMega = Math.max(0, Math.ceil((k.valMega || 300) - count));
 
-                const textSmall = unclaimed > 0 ? '<span class="stars-left done">🎁 Abholen!</span>' : `<span class="stars-left">Noch ${starsForNextSmall} ⭐</span>`;
+                const textSmall = unclaimed > 0 ? '<span class="stars-left done">🎁 Abholen!</span>' : `<span class="stars-left">Noch ${starsForNextSmall} ⭐ bis ${nextSmallTarget}</span>`;
                 const textBig = starsForBig === 0 ? '<span class="stars-left done">🎉 GESCHAFFT!</span>' : `<span class="stars-left">Noch ${starsForBig} ⭐</span>`;
                 const textMega = starsForMega === 0 ? '<span class="stars-left done">🎉 GESCHAFFT!</span>' : `<span class="stars-left">Noch ${starsForMega} ⭐</span>`;
 
-                // Sterne Box (Tally)
+                // --- STERNE-BOX (Tally Box) ---
                 let tallyHtml = '';
-                if (unclaimed > 0) {
-                    tallyHtml = '<span style="color:var(--gold); font-weight:800; font-size:1.1rem; text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);">Ziel erreicht! Belohnung abholen! 🎁</span>';
-                } else if (visualSmallPoints === 0) {
-                    tallyHtml = `<span style="color:rgba(255,255,255,0.4); font-weight:bold; font-size:0.9rem;">0 / ${step} Sternen gesammelt</span>`;
-                } else {
-                    for(let i=0; i<Math.floor(visualSmallPoints); i++) tallyHtml += '<div class="star-icon">⭐</div>';
-                    if(visualSmallPoints % 1 !== 0) tallyHtml += '<div class="star-icon" style="opacity:0.7;font-size:1.4rem">🌟</div>';
+                
+                // 1. Trophäen für bereits abgeschlossene und abgeholte Etappen!
+                // Sie verschwinden nicht, das Kind behält sie dauerhaft sichtbar.
+                if (ackTens > 0) {
+                    // Wenn es sehr viele werden, fassen wir sie zusammen, damit der Platz reicht
+                    if (ackTens > 5) {
+                        tallyHtml += `<div style="display:flex; align-items:center; gap:5px; background:rgba(251,191,36,0.15); padding:4px 12px; border-radius:15px; border: 1px solid rgba(251,191,36,0.3);">
+                                        <span style="font-size:1.6rem;">🏆</span>
+                                        <span style="font-weight:900; font-size:1.3rem; color:var(--gold);">x ${ackTens}</span>
+                                      </div>`;
+                    } else {
+                        for(let i=0; i<ackTens; i++) {
+                            tallyHtml += '<div class="star-icon" style="font-size:1.7rem; filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.5));">🏆</div>';
+                        }
+                    }
+                    // Kleiner Trennstrich zwischen Trophäen und neuen Sternen (falls vorhanden)
+                    if (visualSmallPoints > 0 || unclaimed > 0) {
+                       tallyHtml += `<div style="width:2px; height:25px; background:rgba(255,255,255,0.1); margin:0 8px; border-radius:2px;"></div>`;
+                    }
                 }
 
-                // Abholen-Button, falls ein oder mehrere Etappenziele erreicht wurden
+                // 2. Normale Sterne für die aktuell laufende Etappe
+                if (unclaimed > 0) {
+                    for(let i=0; i<step; i++) tallyHtml += '<div class="star-icon">⭐</div>';
+                    tallyHtml += `<div style="width:100%; text-align:center; color:var(--gold); font-weight:800; font-size:1.1rem; text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); margin-top: 5px;">Ziel erreicht! Belohnung abholen! 🎁</div>`;
+                } else if (visualSmallPoints === 0 && ackTens === 0) {
+                    tallyHtml = `<span style="color:rgba(255,255,255,0.4); font-weight:bold; font-size:0.9rem;">Sammle deine ersten Sterne!</span>`;
+                } else {
+                    for(let i=0; i<Math.floor(visualSmallPoints); i++) tallyHtml += '<div class="star-icon">⭐</div>';
+                    if(visualSmallPoints % 1 !== 0) tallyHtml += '<div class="star-icon" style="opacity:0.7;font-size:1.3rem">🌟</div>';
+                }
+
+                // Abholen-Button
                 let claimHtml = '';
                 if (unclaimed > 0) {
                     const btnText = unclaimed > 1 ? `🎁 ${unclaimed}x Belohnung abholen!` : `🎁 Belohnung abholen!`;
@@ -609,7 +639,7 @@
             k.ackTens = (k.ackTens || 0) + 1; 
             // Nur noch ein winziger Poof beim Abholen, da die Feier schon beim Punktesammeln passiert
             confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 }, zIndex: 3000 });
-            showMessage("🎉 Belohnung abgeholt! 🎉");
+            showMessage("🎉 Belohnung abgeholt! Trophäe gesichert! 🏆");
             render(); 
             syncToCloud(); 
         };
